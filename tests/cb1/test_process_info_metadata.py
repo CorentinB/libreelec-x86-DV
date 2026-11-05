@@ -16,6 +16,13 @@ def helpers():
     return text[start:text.index('} // namespace', start)+len('} // namespace')]
 
 
+def statement(prop):
+    # One SetProperty statement of RefreshInfo, as the dialog ships it.
+    text = DIALOG.read_text()
+    start = text.index('SetProperty("'+prop+'",')
+    return text[start:text.index(';', start)+1]
+
+
 def run(test, program, flags=()):
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -68,6 +75,11 @@ int main() {
  assert(L11Content(levels)=="User-generated · D93");
  levels.contentType=9; levels.whitepoint=2;
  assert(L11Content(levels)=="Type 9 · 7254 K");
+ // The panel follows its tallest column until the top margin, then cuts the columns.
+ const auto fit=FitPanel(700,1080);
+ assert(fit.height==824 && fit.top==232 && fit.columns==570);
+ const auto full=FitPanel(1100,1080);
+ assert(full.height==1032 && full.top==24 && full.columns==778);
 }
 '''.replace('HELPERS', helpers())
         run(self, {'test.cpp': program})
@@ -97,6 +109,7 @@ class CServiceBroker {public: static CDataCacheCore& GetDataCacheCore() {static 
 #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
 #include "dialogs/DVPixelFormat.h"
 #include <cassert>
+#include <map>
 extern "C" {
 #include <libavutil/mem.h>
 }
@@ -138,11 +151,44 @@ int main() {
  assert(DVBRIDGE::SourceColour(info.tags.primaries,info.tags.transfer,false,false)=="BT.2020 · PQ · Limited");
  assert(DVBRIDGE::SourceColour(AVCOL_PRI_BT709,AVCOL_TRC_BT709,true,true)=="BT.709 (assumed) · SDR · Full");
  assert(DVBRIDGE::SourceColour(-1,-1,false,false).empty());
+ std::map<std::string,std::string> properties;
+ const auto SetProperty=[&](const char* key,const std::string& value) {properties[key]=value;};
+ auto shown=info;
+ const auto colour=[&] {const auto& data=shown; COLOUR};
+ colour(); assert(properties["DV.SourceColour"]=="BT.2020 · PQ · Limited");
+ // Profiles 5 and 10.0 are IPT-PQc2 under unspecified tags, never Kodi's BT.709 guess.
+ shown.profile=5; shown.compatibility=0;
+ shown.tags={AVCOL_PRI_BT709,AVCOL_TRC_UNSPECIFIED,true,true,""};
+ colour(); assert(properties["DV.SourceColour"]=="IPT-PQc2");
+ shown.profile=10; colour(); assert(properties["DV.SourceColour"]=="IPT-PQc2");
+ shown.compatibility=1; colour(); assert(properties["DV.SourceColour"]=="BT.709 (assumed) · Full");
  av_free(data);
 }
-'''
+'''.replace('COLOUR', statement('DV.SourceColour'))
         run(self, {'test.cpp': program, 'cores/DataCacheCore.h': cache, 'ServiceBroker.h': broker},
             ('-fsanitize=address,undefined', '-I'+str(prefix/'include'), '-L'+str(prefix/'lib'), '-lavutil', '-lm'))
+
+
+class PictureStateTests(unittest.TestCase):
+    def test_layer_type_and_primaries_guess_describe_the_current_stream(self):
+        # The picture is reused from one stream to the next and only the FFmpeg decoder sets
+        # these, so the player clears them where it clears the stereo mode.
+        player = (TREE/'xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp').read_text()
+        opened = player[player.index('m_picture.stereoMode.clear();'):]
+        opened = opened[:opened.index('m_stalled')]
+        self.assertIn('m_picture.strDVELType.clear();', opened)
+        self.assertIn('m_picture.colorPrimariesGuessed = false;', opened)
+        self.assertIn('pPicture->colorPrimariesGuessed,', player)
+        self.assertNotIn('m_originalColorPrimaries', player)
+        # The flag is set where Kodi guesses, for every picture the FFmpeg decoder returns.
+        ffmpeg = (TREE/'xbmc/cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodecFFmpeg.cpp').read_text()
+        self.assertRegex(ffmpeg, r'colorPrimariesGuessed = pVideoPicture->color_primaries == AVCOL_PRI_UNSPECIFIED;'
+                                 r'\s*if \(pVideoPicture->colorPrimariesGuessed\)\s*\{\s*'
+                                 r'if \(pVideoPicture->iDisplayWidth > 1024')
+
+    def test_hdr10plus_rows_skip_dolby_vision_rendered_by_cb1(self):
+        self.assertRegex(DIALOG.read_text(), r'if \(!\(active && data\.profile && !data\.output\.hdr10AI\)\)\s*'
+                         r'side = CServiceBroker::GetDataCacheCore\(\)\.GetVideoSourceSideDataSnapshot\(\);')
 
 
 if __name__ == '__main__':

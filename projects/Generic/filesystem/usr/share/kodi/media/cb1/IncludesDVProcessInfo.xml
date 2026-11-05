@@ -277,7 +277,7 @@
       <include content="DVInfoRow"><param name="label" value="Decoded surface"/><param name="value" value="$INFO[Player.Process(pixformat)]"/><param name="visible" value="!String.IsEmpty(Player.Process(pixformat))"/></include>
       <include content="DVInfoRow"><param name="label" value="Deinterlacing"/><param name="value" value="$INFO[Player.Process(deintmethod)]"/><param name="visible" value="String.IsEqual(Player.Process(videoscantype),i) + !String.IsEmpty(Player.Process(deintmethod))"/></include>
       <include content="DVStackedRow"><param name="label" value="Creative trims"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.CreativeTrims)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.CreativeTrims)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.CreativeTrims),N/A)"/></include>
-      <include content="DVInfoRow"><param name="label" value="FEL reconstructed"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FEL)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="FEL reconstructed"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FEL)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + String.IsEqual(Window(playerprocessinfo).Property(DV.EL),Yes) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40907]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FELUpscaling)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.FELUpscaling)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FELUpscaling),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Display mapping"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.TVProfile)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.TVProfile)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.TVProfile),N/A)"/></include>
       <include content="DVInfoRow"><param name="label" value="Black level"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.DisplayBlack)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.DisplayBlack)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.DisplayBlack),N/A)"/></include>
@@ -364,7 +364,8 @@
       <include content="DVInfoRow"><param name="label" value="Audio queue / data"/><param name="value" value="$INFO[Player.Process(audioqueuelevel)] % / $INFO[Player.Process(audioqueuedatalevel)] %"/><param name="visible" value="Integer.IsGreater(VideoPlayer.AudioStreamCount,0)"/></include>
     </definition></include>
   <!-- The native grouplists start at 108; their leading spacer reserves the headings and their
-       end spacer the meter strip, so the measured column height covers the whole panel. -->
+       end spacer the meter strip, so the measured column height covers the whole panel. The
+       dialog sizes them (FitPanel), cutting the rows above the strip if the screen runs out. -->
   <include name="DVColumnSpacer"><definition>
       <control type="group"><height>32</height></control>
     </definition></include>

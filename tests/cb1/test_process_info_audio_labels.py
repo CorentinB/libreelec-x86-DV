@@ -66,21 +66,38 @@ class AudioLabelsTests(unittest.TestCase):
         row = self.panel.find('./include[@name="DVInfoRow"]')
         for label in row.findall('.//control[@type="fadelabel"]'):
             self.assertEqual(label.findtext('scroll'), 'true')
-        # Every row of a column visible at once must still fit its grouplist, and the Input
-        # column, whose rows can all show together, must keep the panel on screen.
-        height = lambda name: int(self.panel.find('./include[@name="'+name+'"]/definition/control').findtext('height'))
-        fixed = {name: height(name) for name in ('DVInfoRow', 'DVStackedRow', 'DVSection', 'DVBlockChips')}
-        fixed['DVUsageChips'] = fixed['DVBlockChips']
+        # A column advances by each control's top plus its height (GUIControlGroupList::Size),
+        # an auto-height textbox by at least its minimum: a caption row is 28 px, a stacked one 56.
+        def advance(name):
+            total = 0.0
+            for control in self.panel.findall('./include[@name="'+name+'"]/definition/control'):
+                height = control.find('height')
+                total += float(control.findtext('top') or 0) + float(
+                    height.get('min') if height.text == 'auto' else height.text)
+            return total
+        pitch = {name: advance(name) for name in ('DVInfoRow', 'DVStackedRow', 'DVSection', 'DVBlockChips')}
+        pitch['DVUsageChips'] = pitch['DVBlockChips']
+        self.assertEqual((pitch['DVInfoRow'], pitch['DVStackedRow']), (28, 56))
         def rows(name):
-            return sum(fixed.get(i.get('content') or i.text) or rows(i.get('content') or i.text)
+            return sum(pitch.get(i.get('content') or i.text) or rows(i.get('content') or i.text)
                        for i in self.panel.findall('./include[@name="'+name+'"]/definition/include'))
-        frame = height('DVColumnSpacer') + height('DVColumnEnd')
-        columns = {'col1': ('DVInputFields', 'DVInputDolbyVisionFields'),
-                   'col2': ('DVRenderingFields', 'DVSourceMetadataFields', 'DVHDR10PlusFields',
-                            'DVReconstructionFields', 'DVUsageFields'),
-                   'col3': ('DVOutputFields',)}
-        layout = self.panel.find('./include[@name="DVProcessLayout"]/definition/control')
-        for column, fields in columns.items():
-            grouplist = layout.find('./control[@id="$PARAM['+column+']"]')
-            self.assertGreaterEqual(int(grouplist.findtext('height')), frame + sum(rows(f) for f in fields))
-        self.assertLessEqual(108 + frame + sum(rows(f) for f in columns['col1']) + 16 + 24, 1080)
+        frame = advance('DVColumnSpacer') + advance('DVColumnEnd')
+        # The dialog keeps a 24 px margin above and below the panel (FitPanel) and cuts a taller
+        # column above the meter strip. The Input column, whose rows can all show together,
+        # must never be cut.
+        room = 1080 - 2 * 24
+        self.assertLessEqual(108 + frame + rows('DVInputFields') + rows('DVInputDolbyVisionFields') + 16, room)
+        # Processing for a profile 8.1 CM4.0 file while CB1 renders Dolby Vision: the file's
+        # HDR10+ and the FEL row are hidden then, and the column fits uncut too.
+        shown = {}
+        for row in self.panel.findall('.//include[@content]'):
+            label = row.find('./param[@name="label"]')
+            if row.get('content') in pitch and label is not None:
+                shown.setdefault(label.get('value'), pitch[row.get('content')])
+        processing = ['Rendering', 'Decoded surface', 'Creative trims', 'Source metadata',
+                      'Mastering max / min', 'MaxCLL / MaxFALL', 'RPU max / min', 'RPU CLL / FALL',
+                      'L1 PQ min/max/avg', 'L1 nits min/max/avg', 'L2 trim targets',
+                      'L3 offset min/max/avg', 'L5 L/R/T/B', 'L8 trim targets', 'L9 source primaries',
+                      'L11 content type', 'L254 DM mode / version', 'Used by CB1']
+        self.assertLessEqual(108 + frame + sum(shown[label] for label in processing) +
+                             pitch['DVUsageChips'] + 16, room)

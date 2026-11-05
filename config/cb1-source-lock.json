@@ -26,7 +26,7 @@
     "projects/Generic/patches/linux/linux-9904-hdr10-conversion.patch": "511c761000493be9aeb502fa6e619e8c5acf048a5ec22ae89c1f0f3cd0610b7e",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9005-hdr10plus-commit-transport.patch": "8059f5f2c67470d878f006628aabbaf3d85be568bea4a376bc61a3bd9d906a63",
     "packages/graphics/nvidia-pascal-modeset/package.mk": "73e102f7d812dcd080373b92640ba9c593d14874279acf285a7897006e6397e2",
-    "config/cb1-patch-index.json": "3be190d7f995bafaa0eb3d523d5a10de0d6f1dc2ce3688a0c17c87d11a45b3e0",
+    "config/cb1-patch-index.json": "19e1ac3be7713bf3b09ab46e2fb1a0a3cb754ff9ea839f7f6af6802e2b115451",
     "packages/graphics/nvidia/package.mk": "434527b3e356b2a2dd2dcf231f2f9ea8b087aaa8377911425decd4b8a964b398",
     "packages/graphics/nvidia/files/select-driver": "a59b2112ca28780d6f1d8646d17d34fb657311ce4006ff62f13995a6d81a94cd",
     "projects/Generic/patches/linux/linux-9940-hdr10plus.patch": "cd44a2848195a2c4e0137345d345dfd922cf142b0a103420ce5dc19ae3e26029",
@@ -41,7 +41,7 @@
     "projects/Generic/patches/linux/linux-9900-09-include__linux__hdmi.h.patch": "fc52a46f7745449a0bfd6fe499050c8147dfe32b59d8a3a6f3c08e8b87f7cd91",
     "packages/graphics/nvidia-pascal-modeset/patches/nvidia-pascal-modeset-9001-dv-v1-legacy.patch": "09c2da66eddfc83b1ca16aaa12f8d1e8c3c3278c30b3bf2b17372674ce5db070",
     "packages/graphics/nvidia-open-kernel-modules/package.mk": "3910dd20498cc0049ec37c5781069ac471604b43f29d87b52155955f67f603a6",
-    "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "a59c7ac58b12bba1e90b8b00e121d49569c0cd9ed3d54787a40886f5fefa0f9e",
+    "projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml": "9029cfad208293cb132667bca01b88bc4fd9065619ba2abb584310352c7008a7",
     "packages/mediacenter/kodi/package.mk": "35822e20f72205a5add9af9b0de25a9cdc30812511787b2b8e250d122a7de95e",
     "projects/Generic/patches/linux/linux-9921-amd-dv-diagnostic-and-vrr-guards.patch": "f46665ad8db5131cc6e155b295fe3de8d33c4eadb2f7df8f62dac238967eefab",
     "packages/graphics/nvidia-open-kernel-modules/patches/nvidia-open-kernel-modules-9000-drm-max-bpc.patch": "05b006cc8b7e7fe8d408d985702dfc2d1055e8338b4d3d12a96722b4dffd9945",
@@ -144,7 +144,7 @@
     "tests/cb1/test_audio_information_wiring.py": "e1c3c4570bd19c79fd49447c2bbded7e89abb3380b76d7422530f7506dc702f9",
     "tests/cb1/test_audio_information_labels.py": "5c2c90d74f93c50581e1d27c21356b9c1ac122205c6f702692fd8ff003f74fef",
     "tests/cb1/test_audio_generated_samples.py": "3573ac28af4832564b94cae069a495eb66e2027227d387c9148838ad0b8822bc",
-    "tests/cb1/test_process_info_audio_labels.py": "0e592c34d7dfb41fd41a520970a45bb656681dfea19a3818f2817cf4f3b00fb0",
+    "tests/cb1/test_process_info_audio_labels.py": "ab5e10040ef052eaedeffe83e20ccc5350a98cfdaea57827cb5a6a4028b6cd74",
     "docs/cb1/AUDIO-INFORMATION.md": "6fdc265aade47661b518154e497b82d7d29e6a7c8ae97c0fae32131878b1b116",
     "tests/cb1/test_audio_sink_lifecycle.py": "260bfcfcb874a7dac2022b7c3ee4172af210b4808f9d080e4284bbd73c9ae62a",
     "tests/cb1/test_audio_track_bitrate.py": "0e83dd09868b3aedf4d769981703f3069516e5360ea90736d89e446fc1b080ba",
@@ -186,7 +186,7 @@
     "projects/Generic/patches/kodi/kodi-9992-cb1-display.patch": "7eba1fb531a801ea66079a2e9582f62b1ef8fc6a9c973777050edabecd22b496",
     "projects/Generic/patches/kodi/kodi-9993-cb1-interface.patch": "3eee42128c41947125d72bd6d70480a43c0c6b25ed4ab82d30342158dcb0533a",
     "projects/Generic/patches/kodi/kodi-9994-cb1-integration.patch": "306c0a127d9344627184858de974fe782007eaf5d71002dd4fd5666f198a7317",
-    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": "517e33a89736ace543dc0a4336f91b0f9f2aa906f008df3fbb843eac57bdba0e"
+    "projects/Generic/patches/kodi/kodi-9999-zzzzzzzzz-player-information-layout.patch": "a98870258826b042dfbd3e7882d8d6b707d475f68c404f091c32433e8741c352"
   },
   "staging": {
     "projects/Generic/patches/ffmpeg/ffmpeg-9900-04-ts-dovi-layer.patch": {
