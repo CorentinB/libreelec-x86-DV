@@ -12,14 +12,23 @@ column that would pass it is cut above the meter strip, never the headings.
 Dolby Vision metadata levels appear as chips: in the file, used by CB1 (unused
 ones greyed) and sent to the TV. Forwarded metadata is not described as unused
 solely because CB1 does not apply it locally. CM2.9/CM4 status includes the live
-Auto/Auto 2 decision.
+Auto/Auto 2 decision. In HDR10 Rendering Reference, a Partly used row adds that
+CB1 maps from L1's max and average only; that mode does not use L3.
+
+When CB1 is not active because it refused the stream's admission, Processing
+gives the reason and the requested policy beside it. Output shows a Mode change
+only while a change is pending, has failed or has fallen back. Creative trims
+names why a treatment is unavailable when CB1 reports it.
 
 Source metadata also lists the values FFmpeg parsed from the latest sampled RPU:
 L2 and L8 trim targets, L3 offsets, the L4 anchor, L9 source primaries, L10 target
 displays, the L11 content type and white point, and the L254 and L255 mode and
 version. An L8 target resolves as CB1 resolves it, a preset target display first,
 else the file's L10 definition; targets are named to three significant digits, the
-precision of a 12-bit PQ code. Layers names the base-layer compatibility and the
+precision of a 12-bit PQ code. L1 is given in nits, L3 offsets from neutral
+(0, +63, -61), and L5 as the picture's bars (Full frame, Letterbox, Pillarbox).
+The RPU's L6 values are listed only where they differ from the file's static
+metadata. Pairs read `a / b` and longer lists `a | b | c`. Layers names the base-layer compatibility and the
 enhancement layer as Kodi's decoder classifies it (FEL or MEL), and the FEL row,
 which also names the FEL upscaler, appears only for sources with an enhancement
 layer. The HDR10 link minimum is listed under Output. Input shows the decoder's

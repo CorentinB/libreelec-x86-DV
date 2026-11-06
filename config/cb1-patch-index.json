@@ -1070,7 +1070,7 @@
       "xbmc/cores/VideoPlayer/VideoPlayerVideo.cpp": "Pass each picture's colour tags and enhancement-layer type to the telemetry, clearing both for each new stream.",
       "xbmc/cores/VideoProcessingInfo.h": "Describe the RPU level values and the decoder's source tags.",
       "xbmc/dialogs/DVPixelFormat.h": "Name the decoder's primaries, transfer and range.",
-      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Load the panel fonts, sample memory at 2 Hz, name the metadata the three columns show and keep the panel on screen."
+      "xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp": "Load the panel fonts, sample memory at 2 Hz, name the metadata the three columns show, say why CB1 is inactive and keep the panel on screen."
     }
   }
 }

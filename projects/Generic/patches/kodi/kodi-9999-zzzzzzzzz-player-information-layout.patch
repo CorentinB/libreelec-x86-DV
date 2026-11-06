@@ -365,7 +365,7 @@ index 17d77b4..df505ec 100644
 +}
  }
 diff --git a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
-index bc00552..4fae79b 100644
+index bc00552..c69efbc 100644
 --- a/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 +++ b/xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp
 @@ -16,19 +16,25 @@
@@ -420,7 +420,7 @@ index bc00552..4fae79b 100644
      }
    }
  #endif
-@@ -93,6 +106,131 @@ void CGUIDialogPlayerProcessInfo::OnDeinitWindow(int nextWindowID)
+@@ -93,12 +106,171 @@ void CGUIDialogPlayerProcessInfo::OnDeinitWindow(int nextWindowID)
  }
  
  #ifdef HAVE_DVBRIDGE
@@ -453,6 +453,41 @@ index bc00552..4fae79b 100644
 +{
 +  static constexpr const char* names[] = {"Default", "Cinema", "Game", "Sport", "User-generated"};
 +  return type < std::size(names) ? names[type] : StringUtils::Format("Type {}", type);
++}
++
++// Why CB1 left the trims untreated, for the dvbridge_creative_reason values that come with an
++// invalid or unsupported treatment (dvbridge_creative.c).
++std::string CreativeReason(int reason)
++{
++  switch (reason)
++  {
++    case 2: return "CM4.0 trim editing not qualified";
++    case 6: return "TV-adjusted trims cannot be encoded";
++    case 7: return "Trim target display unknown";
++    case 8: return "L9 source primaries not supported";
++    case 9: return "L9 custom primaries inconsistent";
++    default: return "";
++  }
++}
++
++// L3 stores each offset around 2048.
++std::string Offset(unsigned code)
++{
++  const int offset = static_cast<int>(code) - 2048;
++  return offset ? StringUtils::Format("{:+d}", offset) : "0";
++}
++
++// L5's left, right, top and bottom offsets, read as the picture's bars.
++std::string ActiveArea(const std::array<unsigned, 4>& area)
++{
++  const unsigned left = area[0], right = area[1], top = area[2], bottom = area[3];
++  if (!left && !right && !top && !bottom)
++    return "Full frame";
++  if (!left && !right && top == bottom)
++    return StringUtils::Format("Letterbox · {} px top and bottom", top);
++  if (!top && !bottom && left == right)
++    return StringUtils::Format("Pillarbox · {} px left and right", left);
++  return StringUtils::Format("L {} · R {} · T {} · B {} px", left, right, top, bottom);
 +}
 +
 +std::string TargetList(std::vector<long> nits, const std::vector<unsigned>& unknown)
@@ -552,7 +587,13 @@ index bc00552..4fae79b 100644
  void CGUIDialogPlayerProcessInfo::RefreshInfo()
  {
      const auto render = m_renderUsage.Sample();
-@@ -107,6 +245,11 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.GPUAvailable", render.has_value());
+     SetProperty("DV.GPURender", render ? StringUtils::Format("{:.0f} %", *render) : "N/A");
+-    SetProperty("DV.GPURenderPercent", render ? StringUtils::Format("{:.1f}", *render) : "0");
+     for (const int gauge : {9400, 9401})
+     {
+       CGUIMessage usage(GUI_MSG_ITEM_SELECT, GetID(), gauge, render ? std::lround(*render) : 0);
+@@ -107,6 +279,11 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
      const auto data = CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo();
      SetProperty("DV.SourcePixelFormat", DVBRIDGE::SourcePixelFormat(static_cast<AVPixelFormat>(data.sourceFormat)));
      SetProperty("DV.SourceBits", data.sourceBits ? StringUtils::Format("{}-bit", data.sourceBits) : "N/A");
@@ -564,7 +605,7 @@ index bc00552..4fae79b 100644
      const auto active = data.output.flags;
      const bool hdr10 = active & CDVPlaybackInfo::HDR10;
      const bool metadata = active && data.metadata;
-@@ -119,6 +262,17 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -119,6 +296,17 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
            data.output.width,data.output.height,data.output.refresh));
      const auto cpu = CServiceBroker::GetCPUInfo();
      SetProperty("DV.CPU", cpu ? StringUtils::Format("{} %", cpu->GetUsedPercentage()) : "N/A");
@@ -582,7 +623,7 @@ index bc00552..4fae79b 100644
      SetProperty("DV.DroppedSkipped", data.counters ?
          StringUtils::Format("{} / {}", data.dropped, data.skipped) : "N/A");
      SetProperty("DV.SourceMastering", data.sourceMastering ?
-@@ -126,6 +280,15 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -126,6 +314,15 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
      SetProperty("DV.SourceLight", data.sourceLight ?
          StringUtils::Format("{} / {} nits", data.sourceCLL, data.sourceFALL) : "N/A");
      SetProperty("DV.Profile", data.profile ? StringUtils::Format("{}", data.profile) : "N/A");
@@ -598,7 +639,28 @@ index bc00552..4fae79b 100644
      SetProperty("DV.Level", data.profile ? StringUtils::Format("{}", data.level) : "N/A");
      SetProperty("DV.Version", data.profile ? StringUtils::Format("{}.{}", data.major, data.minor) : "N/A");
      SetProperty("DV.CM", metadata ? VideoProcessingInfoGUI::CMVersion(data) : "");
-@@ -176,6 +339,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -150,16 +347,15 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+     SetProperty("DV.AIL1", "");
+     SetProperty("DV.AIL3", "");
+     SetProperty("DV.OutputL1", "");
+-    SetProperty("DV.PartialBlocks", hdr10 && data.output.effective==3 && metadata ?
+-        std::string(data.blocks[1] ? "L1 max/avg" : "")+
+-        (data.blocks[3] ? (data.blocks[1] ? "; L3 max/avg" : "L3 max/avg") : "") : "");
+-    SetProperty("DV.ActivePolicy", active ? std::string(CDVPlaybackInfo::RequestedPolicy(data.output.effective)) : "Kodi default");
++    // HDR10 Rendering Reference maps from L1's max and average, with the TV's black as its
++    // minimum, and leaves L3 out (cb1_hdr10_expert.c).
++    SetProperty("DV.PartialBlocks", hdr10 && data.output.effective==3 && metadata && applied[1] ?
++        "L1 max and average" : "");
+     if (active && data.output.hdr10AI)
+     {
+       const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+       const int label=data.output.hdr10PlusDV ? 40970 : data.output.effective==1 ? 40867 : 40868;
+       SetProperty("DV.Mode", localizer.Get(label));
+-      SetProperty("DV.ActivePolicy", localizer.Get(label));
+       const bool ai=!data.output.aiModel.empty();
+       SetProperty("DV.Reconstruction", "AI-generated L1/L3");
+       if (ai)
+@@ -176,6 +372,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
              (data.output.untranslatedCurve ? "; authored curve not translated" : "") +
              (data.output.untranslatedSaturation ? "; authored saturation not translated" : ""));
        SetProperty("DV.Profile", "");
@@ -607,8 +669,25 @@ index bc00552..4fae79b 100644
        SetProperty("DV.Level", "");
        SetProperty("DV.Version", "");
        const auto& raw=data.output.aiL1L3;
-@@ -225,7 +390,8 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+@@ -198,8 +396,6 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+         (data.output.iptTransport ? "TV-Led / IPT-PQc2 tunnel" : "TV-Led / YCbCr tunnel") :
+         active & CDVPlaybackInfo::HDR10PLUS ? "PQ / BT.2020 / HDR10+" :
+         hdr10 ? "PQ / BT.2020" : "");
+-    SetProperty("DV.Committed", active && data.output.stream ? StringUtils::Format("{} / {} / {}",
+-        data.output.stream,data.output.picture,data.output.revision) : "");
+     // Next-picture preparation is not an output-mode transition.
+     const bool transaction=data.transaction.identity.Valid() &&
+         std::string_view(data.transaction.stage)!="Committed" &&
+@@ -223,21 +419,31 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+             data.transaction.retryCount,yesno(data.transaction.restored)) : "");
+     SetProperty("DV.OutputStage", transaction ?
          std::string(data.transaction.stage)+" (not committed)" : "");
++    // An admission refused while CB1 is inactive is settled, not a pending change: Processing
++    // gives its reason beside CB1, and Output shows no Mode change for it.
++    const bool refused=!active && transaction && !data.transaction.atomicError &&
++        data.transaction.reason!=VideoProcessingReason::None &&
++        std::string_view(data.transaction.stage)=="Admission checked";
++    SetProperty("DV.InactiveReason", refused ? reasonText(data.transaction.reason) : "");
      SetProperty("DV.ReferenceWarning", data.referenceWarning ? "Consider Reference" : "");
      SetProperty("DV.TVProfile", active && (data.output.effective==3 || data.output.effective==4 || data.output.effective==6) ?
 -        StringUtils::Format("{} / {:g} nits",
@@ -617,40 +696,53 @@ index bc00552..4fae79b 100644
              data.output.gamut==1 ? "BT.709" : data.output.gamut==2 ? "P3-D65" : "BT.2020",
              data.output.effective==3 ? data.output.target : data.output.manualPeak) : "");
      SetProperty("DV.DisplayBlack", hdr10 && data.output.effective==3 ?
-@@ -234,6 +400,9 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+         StringUtils::Format("{:g} nits", data.output.displayBlack) : "");
+-    SetProperty("DV.HDR10Policy", hdr10 ? CDVPlaybackInfo::Policy(data.output) : "");
      SetProperty("DV.HDR10Target", hdr10 && data.output.effective!=3 ? StringUtils::Format("{:g} nits", data.output.target) : "");
      SetProperty("DV.HDR10TargetLabel", hdr10 && data.output.effective!=3 ? (data.output.effective==2 ? "Source reference" :
          data.output.effective==7 ? "Curve reference" : "Mapping target") : "");
 +    // Basic takes its reference from L6 max_luminance, else the RPU's source_max_pq (dvbridge_hdr10_target).
 +    SetProperty("DV.HDR10TargetOrigin", hdr10 && data.output.effective==2 ?
 +        (data.output.level6 ? "L6 max" : "RPU source max") : "");
++    const std::string trimReason=CreativeReason(data.output.creativeReason);
      SetProperty("DV.CreativeTrims", active ? (data.output.creativeKnown ?
          (data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Invalid) ||
           data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Unsupported) ?
-@@ -252,18 +421,47 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+-            "Treatment unavailable" :
++            "Treatment unavailable"+(trimReason.empty() ? "" : " · "+trimReason) :
+          data.output.creativeStatus==static_cast<int>(VideoCreativeStatus::Neutral) ?
+             "Neutral" :
+          hdr10 ? (data.output.creativeApplied & ((1u<<2)|(1u<<8)) ?
+@@ -251,19 +457,48 @@ void CGUIDialogPlayerProcessInfo::RefreshInfo()
+           data.output.creativeEdited & (1u<<2) ? "HDR10+ curve from L2" :
            data.output.creativeEdited & (1u<<1) ? "HDR10+ scene curve" : "Statistics only");
      SetProperty("DV.Precision", active ? StringUtils::Format("{}-bit framebuffer", data.output.bits) : "N/A");
-     SetProperty("DV.L1PQ", metadata && data.l1 ? StringUtils::Format("{} | {} | {}", data.pq[0], data.pq[1], data.pq[2]) : "N/A");
+-    SetProperty("DV.L1PQ", metadata && data.l1 ? StringUtils::Format("{} | {} | {}", data.pq[0], data.pq[1], data.pq[2]) : "N/A");
 -    const auto nits = [](unsigned pq) {
 -      const double p = std::pow(pq / 4095.0, 32.0 / 2523.0);
 -      return 10000.0 * std::pow(std::max(p - 3424.0 / 4096.0, 0.0) /
 -          (2413.0 / 128.0 - 2392.0 / 128.0 * p), 16384.0 / 2610.0);
 -    };
++    // Pairs read "a / b" and longer lists "a | b | c". L6 is written as the file's static
++    // values are, so the panel can hide it when the two agree.
      SetProperty("DV.L1Nits", metadata && data.l1 ? StringUtils::Format("{:.1f} | {:.1f} | {:.1f} nits",
 -        nits(data.pq[0]), nits(data.pq[1]), nits(data.pq[2])) : "N/A");
+-    SetProperty("DV.L5", metadata && data.l5 ? StringUtils::Format("{} | {} | {} | {}",
+-        data.area[0], data.area[1], data.area[2], data.area[3]) : "N/A");
+-    SetProperty("DV.Mastering", metadata && data.l6 ? StringUtils::Format("{} | {:.4f} nits",
 +        PQNits(data.pq[0]), PQNits(data.pq[1]), PQNits(data.pq[2])) : "N/A");
-     SetProperty("DV.L5", metadata && data.l5 ? StringUtils::Format("{} | {} | {} | {}",
-         data.area[0], data.area[1], data.area[2], data.area[3]) : "N/A");
-     SetProperty("DV.Mastering", metadata && data.l6 ? StringUtils::Format("{} | {:.4f} nits",
++    SetProperty("DV.L5", metadata && data.l5 ? ActiveArea(data.area) : "N/A");
++    SetProperty("DV.Mastering", metadata && data.l6 ? StringUtils::Format("{} / {:.4f} nits",
          data.maxMaster, data.minMaster / 10000.0) : "N/A");
-     SetProperty("DV.CLL", metadata && data.l6 ? StringUtils::Format("{} | {} nits", data.maxCLL, data.maxFALL) : "N/A");
+-    SetProperty("DV.CLL", metadata && data.l6 ? StringUtils::Format("{} | {} nits", data.maxCLL, data.maxFALL) : "N/A");
++    SetProperty("DV.CLL", metadata && data.l6 ? StringUtils::Format("{} / {} nits", data.maxCLL, data.maxFALL) : "N/A");
 +    // The other levels' values; the parsed chips say which levels the file carries.
 +    const auto& levels = data.levels;
 +    const auto carried = [&](unsigned level) { return metadata && data.blocks[level]; };
 +    SetProperty("DV.L2Targets", carried(2) ? L2Targets(levels) : "");
 +    SetProperty("DV.L3", carried(3) ? StringUtils::Format("{} | {} | {}",
-+        levels.l3[0], levels.l3[1], levels.l3[2]) : "");
-+    SetProperty("DV.L4", carried(4) ? StringUtils::Format("{} | {}", levels.l4[0], levels.l4[1]) : "");
++        Offset(levels.l3[0]), Offset(levels.l3[1]), Offset(levels.l3[2])) : "");
++    SetProperty("DV.L4", carried(4) ? StringUtils::Format("{} / {}", levels.l4[0], levels.l4[1]) : "");
 +    SetProperty("DV.L8Targets", carried(8) ? L8Targets(levels) : "");
 +    SetProperty("DV.L9", carried(9) ? RPUPrimaries(levels.l9) : "");
 +    SetProperty("DV.L10", carried(10) ? L10Displays(levels) : "");
@@ -681,7 +773,7 @@ index bc00552..4fae79b 100644
  }
  #endif
  
-@@ -289,16 +487,21 @@ void CGUIDialogPlayerProcessInfo::Process(unsigned int currentTime, CDirtyRegion
+@@ -289,16 +524,21 @@ void CGUIDialogPlayerProcessInfo::Process(unsigned int currentTime, CDirtyRegion
        if (!panel || !surface)
          continue;
        float content = 0.0f;

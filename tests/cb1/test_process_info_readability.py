@@ -12,7 +12,7 @@ class ProcessInfoReadability(unittest.TestCase):
         path=Path(__file__).resolve().parents[2]/'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml'
         panel=ET.parse(path)
         row=next(row for row in panel.iter('include') if any(
-            p.get('name')=='label' and p.get('value')=='Temperature' for p in row.findall('param')))
+            p.get('name')=='label' and p.get('value')=='CPU temperature' for p in row.findall('param')))
         value=next(p.get('value') for p in row.findall('param') if p.get('name')=='value')
         self.assertEqual(value,'$INFO[System.CPUTemperature]')
 

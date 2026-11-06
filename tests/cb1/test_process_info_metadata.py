@@ -75,6 +75,16 @@ int main() {
  assert(L11Content(levels)=="User-generated · D93");
  levels.contentType=9; levels.whitepoint=2;
  assert(L11Content(levels)=="Type 9 · 7254 K");
+ // L3 offsets read around 2048, L5 as the picture's bars.
+ assert(Offset(2048)=="0" && Offset(2111)=="+63" && Offset(1987)=="-61");
+ assert(ActiveArea({0,0,0,0})=="Full frame");
+ assert(ActiveArea({0,0,276,276})=="Letterbox · 276 px top and bottom");
+ assert(ActiveArea({240,240,0,0})=="Pillarbox · 240 px left and right");
+ assert(ActiveArea({0,0,276,280})=="L 0 · R 0 · T 276 · B 280 px");
+ // Only the reasons that come with an untreated trim are named.
+ assert(CreativeReason(2)=="CM4.0 trim editing not qualified");
+ assert(CreativeReason(8)=="L9 source primaries not supported");
+ assert(CreativeReason(0).empty() && CreativeReason(3).empty() && CreativeReason(11).empty());
  // The panel follows its tallest column until the top margin, then cuts the columns.
  const auto fit=FitPanel(700,1080);
  assert(fit.height==824 && fit.top==232 && fit.columns==570);
@@ -82,6 +92,46 @@ int main() {
  assert(full.height==1032 && full.top==24 && full.columns==778);
 }
 '''.replace('HELPERS', helpers())
+        run(self, {'test.cpp': program})
+
+
+    def test_rpu_l6_reads_as_the_static_values_and_l1_use_is_partial_in_reference(self):
+        program = r'''
+#include "cores/VideoProcessingInfo.h"
+#include <cassert>
+#include <format>
+#include <map>
+#include <string>
+struct StringUtils {template<class... T> static std::string Format(std::format_string<T...> pattern, T&&... args)
+ {return std::format(pattern, std::forward<T>(args)...);}};
+int main() {
+ VideoProcessingInfo data;
+ std::map<std::string, std::string> p;
+ auto SetProperty = [&](const char* key, const std::string& value) { p[key] = value; };
+ const bool metadata = true;
+ data.l6 = data.sourceMastering = data.sourceLight = true;
+ data.maxMaster = 1000; data.minMaster = 1; data.maxCLL = 989; data.maxFALL = 214;
+ data.sourceMax = 1000; data.sourceMin = 0.0001; data.sourceCLL = 989; data.sourceFALL = 214;
+ auto l6 = [&] { @MASTERING@ @SOURCE_MASTERING@ @CLL@ @SOURCE_LIGHT@ };
+ l6();
+ // Equal values read the same, so the panel hides the RPU copy.
+ assert(p["DV.Mastering"] == "1000 / 0.0001 nits" && p["DV.Mastering"] == p["DV.SourceMastering"]);
+ assert(p["DV.CLL"] == "989 / 214 nits" && p["DV.CLL"] == p["DV.SourceLight"]);
+ data.maxMaster = 4000; data.maxFALL = 400; l6();
+ assert(p["DV.Mastering"] != p["DV.SourceMastering"] && p["DV.CLL"] != p["DV.SourceLight"]);
+ // HDR10 Rendering Reference reads L1's max and average only, and only when it uses L1.
+ bool hdr10 = true; std::bitset<256> applied; applied[1] = true; data.output.effective = 3;
+ auto partial = [&] { @PARTIAL@ };
+ partial(); assert(p["DV.PartialBlocks"] == "L1 max and average");
+ applied[1] = false; partial(); assert(p["DV.PartialBlocks"].empty());
+ applied[1] = true; data.output.effective = 2; partial(); assert(p["DV.PartialBlocks"].empty());
+ hdr10 = false; data.output.effective = 3; partial(); assert(p["DV.PartialBlocks"].empty());
+}
+'''
+        for name, prop in (('SOURCE_MASTERING', 'DV.SourceMastering'), ('MASTERING', 'DV.Mastering'),
+                           ('SOURCE_LIGHT', 'DV.SourceLight'), ('CLL', 'DV.CLL'),
+                           ('PARTIAL', 'DV.PartialBlocks')):
+            program = program.replace('@'+name+'@', statement(prop))
         run(self, {'test.cpp': program})
 
 

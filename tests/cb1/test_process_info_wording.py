@@ -9,11 +9,12 @@ import xml.etree.ElementTree as ET
 
 PANEL=(Path(__file__).resolve().parents[2]/
        'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
-# Every source the RC3 panel displays, now in a row, the signal chain or the meters.
+# Every source the RC3 panel displays, now in a row, the signal chain or the meters. L1 is
+# shown once, in nits, so its PQ codes (L1PQ) are no longer a row.
 RC2_FIELDS=[f'Property(DV.{name})' for name in (
     'AIL1 AIL3 AIModel AdmissionReason AppliedBlocks AtomicResult BL BeforeAI CLL CM CPU Circuit CreativeTrims '
     'Display DisplayBlack DroppedSkipped EL Engine Enhanced FEL FELUpscaling Fallback GPUAvailable GPURender '
-    'HDR10Target HDR10TargetLabel L1Nits L1PQ L5 Level Mastering MinimumLinkBits Mode OutputL1 '
+    'HDR10Target HDR10TargetLabel L1Nits L5 Level Mastering MinimumLinkBits Mode OutputL1 '
     'OutputStage ParsedBlocks ProcessingVisible Profile RPU Reconstruction '
     'ReferenceWarning RequestedPolicy SignalIntent SourceBits SourceLight SourceMastering '
     'SourcePixelFormat TVProfile TransmittedBlocks Transport Version').split()]+[
@@ -61,7 +62,8 @@ int main(){
  VideoProcessingInfo data;auto& output=data.output;
  std::map<std::string,std::string> p;
  auto SetProperty=[&](const char* key,const std::string& value){p[key]=value;};
- auto refresh=[&]{const auto active=output.flags;const bool hdr10=false,metadata=false; CODE };
+ auto refresh=[&]{const auto active=output.flags;const bool hdr10=false,metadata=false;
+  const auto applied=data.AppliedBlocks(); CODE };
  output.flags=1;output.hdr10AI=true;output.effective=1;
  output.aiModel="CB1-L1L3 0.1";output.aiBaseline={12,3079,1000};
  output.aiL1L3={15,3100,1100,2048,2050,2049};
@@ -255,7 +257,7 @@ int main() {
         panel=ET.parse(PANEL)
         rows=(panel.findall('.//include[@content="DVInfoRow"]')+
               panel.findall('.//include[@content="DVStackedRow"]'))
-        self.assertEqual(len(rows),70)
+        self.assertEqual(len(rows),71)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))
@@ -275,8 +277,22 @@ int main() {
         self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))',used)
         self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))',sent)
         values={r.find('./param[@name="value"]').get('value') for r in rows}
-        for prop in ('ParsedBlocks','AppliedBlocks','TransmittedBlocks','UnappliedBlocks','PartialBlocks'):
+        for prop in ('ParsedBlocks','AppliedBlocks','TransmittedBlocks','UnappliedBlocks'):
             self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.'+prop+')]',values)
+        # What CB1 reads only in part is a row under the chips of what it uses.
+        self.assertEqual(row_for('DV.PartialBlocks').find('./param[@name="label"]').get('value'),'Partly used')
+        processing=panel.find('./include[@name="DVRenderingFields"]')
+        self.assertIn(row_for('DV.InactiveReason'),processing.findall('.//include[@content="DVStackedRow"]'))
+        # An admission refused while CB1 is inactive is explained beside CB1, not as a Mode change.
+        for item in panel.findall('./include[@name="DVModeChangeFields"]/definition/include'):
+            label=item.find('./param[@name="label"]').get('value')
+            if label in ('Mode change','Requested policy','Pending output','$LOCALIZE[40849]'):
+                self.assertIn('String.IsEmpty(Window(playerprocessinfo).Property(DV.InactiveReason))',
+                              item.find('./param[@name="visible"]').get('value'),label)
+        # RPU L6 rows show only where they differ from the file's static values.
+        for prop,static in (('DV.Mastering','DV.SourceMastering'),('DV.CLL','DV.SourceLight')):
+            self.assertIn('!String.IsEqual(Window(playerprocessinfo).Property('+prop+'),Window(playerprocessinfo).Property('+static+'))',
+                          row_for(prop).find('./param[@name="visible"]').get('value'))
         # Values wrap instead of scrolling, and a row grows by the lines its value needs.
         for name,most in (('DVInfoRow',89),('DVStackedRow',118)):
             self.assertIsNone(panel.find('./include[@name="'+name+'"]//control[@type="fadelabel"]'))
@@ -288,7 +304,7 @@ int main() {
         # The long values get the full column, with room for four lines.
         stacked=panel.findall('.//include[@content="DVStackedRow"]')
         for prop in ('DV.Fallback','DV.AdmissionReason','DV.Reconstruction','DV.RequestedPolicy',
-                     'DV.OutputStage','DV.AtomicResult','DV.CreativeTrims'):
+                     'DV.OutputStage','DV.AtomicResult','DV.CreativeTrims','DV.InactiveReason'):
             self.assertIn(row_for(prop),stacked,prop)
 
     def test_every_rc3_field_remains_displayed(self):
@@ -301,15 +317,13 @@ int main() {
         source=(Path(os.environ['KODI_NATIVE_SOURCE_TREE'])/
                 'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
         names=set(re.findall(r'SetProperty\("DV\.(\w+)"',source))
-        # Shown another way: the gauge reads its integer, the mode name carries both policies.
-        # RC3 no longer displays the partial-use list.
-        shown_elsewhere={'GPURenderPercent','ActivePolicy','HDR10Policy','PartialBlocks'}
         text=PANEL.read_text()
-        for name in sorted(names-shown_elsewhere):
+        for name in sorted(names):
             self.assertIn('Property(DV.'+name+')',text,name)
         for name in ('L2Targets','L3','L4','L8Targets','L9','L10','L11','L254','L255',
                      'HDR10PlusTarget','HDR10PlusMaxSCL','HDR10PlusAverage','HDR10PlusCurve',
-                     'SourceColour','ProfileDetail','Layers','HDR10TargetOrigin','Precision','Committed'):
+                     'SourceColour','ProfileDetail','Layers','HDR10TargetOrigin','Precision',
+                     'PartialBlocks','InactiveReason'):
             self.assertIn(name,names)
 
     def test_memory_meter_reads_the_refreshed_property(self):
