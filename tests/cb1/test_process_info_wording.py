@@ -7,6 +7,31 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
+PANEL=(Path(__file__).resolve().parents[2]/
+       'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
+# Every source the RC3 panel displays, now in a row, the signal chain or the meters. L1 is
+# shown once, in nits, so its PQ codes (L1PQ) are no longer a row.
+RC2_FIELDS=[f'Property(DV.{name})' for name in (
+    'AIL1 AIL3 AIModel AdmissionReason AppliedBlocks AtomicResult BL BeforeAI CLL CM CPU Circuit CreativeTrims '
+    'Display DisplayBlack DroppedSkipped EL Engine Enhanced FEL FELUpscaling Fallback GPUAvailable GPURender '
+    'HDR10Target HDR10TargetLabel L1Nits L5 Level Mastering MinimumLinkBits Mode OutputL1 '
+    'OutputStage ParsedBlocks ProcessingVisible Profile RPU Reconstruction '
+    'ReferenceWarning RequestedPolicy SignalIntent SourceBits SourceLight SourceMastering '
+    'SourcePixelFormat TVProfile TransmittedBlocks Transport Version').split()]+[
+    f'Player.Process({name})' for name in (
+    'audiobedobjects audiobedobjectslabel audiodecoder audiodialnorm audiooutputchannels '
+    'audiooutputcodec audiooutputdata audiooutputtransport audiopresentation audioqueuedatalevel '
+    'audioqueuelevel audiosourcebitrate audiosourcechannels audiosourceformat audiosourcelanguage '
+    'audiosourcetitle videodar videodecoder videofps videoheight videolivebitrate '
+    'videoqueuedatalevel videoqueuelevel videowidth').split()]+[
+    'Player.CacheLevel','System.CPUTemperature','Property(DV.Memory)',
+    'VideoPlayer.AudioStreamCount','VideoPlayer.HasSubtitles','VideoPlayer.HdrType',
+    'VideoPlayer.SubtitlesEnabled','VideoPlayer.SubtitlesLanguage']
+# Kodi labels the panel adds to the RC3 set: scan type, codec, decoded surface, deinterlacer.
+ADDED_LABELS=['Player.Process(videoscantype)','Player.Process(pixformat)',
+              'Player.Process(deintmethod)','VideoPlayer.VideoCodec']
+
+
 
 class ProcessInfoWordingTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'), 'Set patched Kodi source tree')
@@ -37,7 +62,8 @@ int main(){
  VideoProcessingInfo data;auto& output=data.output;
  std::map<std::string,std::string> p;
  auto SetProperty=[&](const char* key,const std::string& value){p[key]=value;};
- auto refresh=[&]{const auto active=output.flags;const bool hdr10=false,metadata=false; CODE };
+ auto refresh=[&]{const auto active=output.flags;const bool hdr10=false,metadata=false;
+  const auto applied=data.AppliedBlocks(); CODE };
  output.flags=1;output.hdr10AI=true;output.effective=1;
  output.aiModel="CB1-L1L3 0.1";output.aiBaseline={12,3079,1000};
  output.aiL1L3={15,3100,1100,2048,2050,2049};
@@ -126,6 +152,7 @@ int main() {
  VideoProcessingInfo data;auto& output=data.output;
  std::map<std::string,std::string> properties;
  auto SetProperty=[&](const char* key,const std::string& value){properties[key]=value;};
+ struct {std::string Get(int id) const {return id==40834 ? "OLED" : id==40835 ? "LCD" : "";}} localizer;
  auto refresh=[&]{const auto active=output.flags;const bool hdr10=active&CDVPlaybackInfo::HDR10;
   STATEMENTS
  };
@@ -135,6 +162,9 @@ int main() {
  assert(properties["DV.TVProfile"]=="P3-D65 / 1234.5 nits");
  assert(properties["DV.DisplayBlack"]=="0.0042 nits");
  assert(properties["DV.HDR10Target"].empty()); // No duplicate peak row.
+ output.panel=1;refresh();
+ assert(properties["DV.TVProfile"]=="OLED · P3-D65 / 1234.5 nits");
+ output.panel=0;
  output.target=600;output.gamut=1;output.displayBlack=0;
  refresh();
  assert(properties["DV.TVProfile"]=="BT.709 / 600 nits");
@@ -224,43 +254,119 @@ int main() {
             self.assertEqual(ran.returncode, 0, ran.stderr)
 
     def test_block_details_keep_source_use_and_delivery_visible_together(self):
-        panel=ET.parse(Path(__file__).resolve().parents[2]/
-            'projects/Generic/filesystem/usr/share/kodi/media/cb1/IncludesDVProcessInfo.xml')
-        rows=panel.findall('.//include[@content="DVInfoRow"]')
+        panel=ET.parse(PANEL)
+        rows=(panel.findall('.//include[@content="DVInfoRow"]')+
+              panel.findall('.//include[@content="DVStackedRow"]'))
+        self.assertEqual(len(rows),71)
         self.assertIsNone(panel.find('./variable[@name="DVAudioOutput"]'))
         self.assertTrue(any(r.find('./param[@name="value"]').get('value') ==
                             '$INFO[Player.Process(audiooutputtransport)]' for r in rows))
-        expected={'DV.ParsedBlocks':'File metadata','DV.AppliedBlocks':'Used by CB1',
-                  'DV.TransmittedBlocks':'Sent to TV','DV.MinimumLinkBits':'$LOCALIZE[40848]',
-                  'DV.Fallback':'Fallback'}
-        for prop,label in expected.items():
-            row=next(r for r in rows if r.find('./param[@name="value"]').get('value')==
-                     '$INFO[Window(playerprocessinfo).Property('+prop+')]')
-            self.assertEqual(row.find('./param[@name="label"]').get('value'),label)
         def row_for(prop):
             return next(r for r in rows if r.find('./param[@name="value"]').get('value')==
                         '$INFO[Window(playerprocessinfo).Property('+prop+')]')
-        used=row_for('DV.AppliedBlocks').find('./param[@name="visible"]').get('value')
-        sent=row_for('DV.TransmittedBlocks').find('./param[@name="visible"]').get('value')
+        expected={'DV.MinimumLinkBits':'$LOCALIZE[40848]','DV.Fallback':'Fallback'}
+        for prop,label in expected.items():
+            self.assertEqual(row_for(prop).find('./param[@name="label"]').get('value'),label)
+        # Each list of levels is a row of chips under its own caption.
+        sections={s.find('./param[@name="label"]').get('value'):s.find('./param[@name="visible"]').get('value')
+                  for s in panel.findall('.//include[@content="DVSection"]')
+                  if s.find('./param[@name="visible"]') is not None}
+        used,sent=sections['Used by CB1'],sections['Sent to TV']
+        self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.ParsedBlocks))',sections['File metadata'])
         self.assertNotIn('DV.TransmittedBlocks',used)
         self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.AppliedBlocks))',used)
         self.assertIn('!String.IsEmpty(Window(playerprocessinfo).Property(DV.TransmittedBlocks))',sent)
         values={r.find('./param[@name="value"]').get('value') for r in rows}
-        self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.UnappliedBlocks)]',values)
-        self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.PartialBlocks)]',values)
-        controls=panel.findall('./include[@name="DVInfoRow"]/definition/control/control')
-        self.assertEqual(len(controls),2)
-        self.assertEqual(controls[0].get('type'),'label')
-        self.assertEqual(controls[1].get('type'),'label')
-        self.assertNotEqual(controls[1].findtext('scroll'),'true')
-        self.assertEqual(controls[1].findtext('wrapmultiline'),'true')
-        self.assertEqual(controls[1].findtext('aligny'),'top')
-        for prop in ('DV.Fallback','DV.AdmissionReason','DV.Reconstruction'):
-            self.assertGreaterEqual(int(row_for(prop).find('./param[@name="height"]').get('value')),90)
-        for prop in ('DV.RequestedPolicy','DV.OutputStage','DV.AtomicResult'):
-            height=row_for(prop).find('./param[@name="height"]')
-            self.assertGreaterEqual(int(height.get('value')) if height is not None else 30,54,prop)
-        default=panel.find('./include[@name="DVInfoRow"]/param[@name="height"]').get('default')
-        for prop in ('DV.ParsedBlocks','DV.AppliedBlocks','DV.TransmittedBlocks','DV.L1Nits'):
-            height=row_for(prop).find('./param[@name="height"]')
-            self.assertEqual(int(height.get('value') if height is not None else default),30,prop)
+        for prop in ('ParsedBlocks','AppliedBlocks','TransmittedBlocks','UnappliedBlocks'):
+            self.assertNotIn('$INFO[Window(playerprocessinfo).Property(DV.'+prop+')]',values)
+        # What CB1 reads only in part is a row under the chips of what it uses.
+        self.assertEqual(row_for('DV.PartialBlocks').find('./param[@name="label"]').get('value'),'Partly used')
+        processing=panel.find('./include[@name="DVRenderingFields"]')
+        self.assertIn(row_for('DV.InactiveReason'),processing.findall('.//include[@content="DVStackedRow"]'))
+        # An admission refused while CB1 is inactive is explained beside CB1, not as a Mode change.
+        for item in panel.findall('./include[@name="DVModeChangeFields"]/definition/include'):
+            label=item.find('./param[@name="label"]').get('value')
+            if label in ('Mode change','Requested policy','Pending output','$LOCALIZE[40849]'):
+                self.assertIn('String.IsEmpty(Window(playerprocessinfo).Property(DV.InactiveReason))',
+                              item.find('./param[@name="visible"]').get('value'),label)
+        # RPU L6 rows show only where they differ from the file's static values.
+        for prop,static in (('DV.Mastering','DV.SourceMastering'),('DV.CLL','DV.SourceLight')):
+            self.assertIn('!String.IsEqual(Window(playerprocessinfo).Property('+prop+'),Window(playerprocessinfo).Property('+static+'))',
+                          row_for(prop).find('./param[@name="visible"]').get('value'))
+        # Values wrap instead of scrolling, and a row grows by the lines its value needs.
+        for name,most in (('DVInfoRow',89),('DVStackedRow',118)):
+            self.assertIsNone(panel.find('./include[@name="'+name+'"]//control[@type="fadelabel"]'))
+            value=panel.find('./include[@name="'+name+'"]/definition/control[@type="textbox"]')
+            self.assertIsNone(value.find('autoscroll'))
+            height=value.find('height')
+            self.assertEqual((height.text,height.get('min'),height.get('max')),('auto','29.5',str(most)))
+        self.assertEqual(panel.find('./include[@name="DVInfoRow"]/definition/control').findtext('height'),'0')
+        # The long values get the full column, with room for four lines.
+        stacked=panel.findall('.//include[@content="DVStackedRow"]')
+        for prop in ('DV.Fallback','DV.AdmissionReason','DV.Reconstruction','DV.RequestedPolicy',
+                     'DV.OutputStage','DV.AtomicResult','DV.CreativeTrims','DV.InactiveReason'):
+            self.assertIn(row_for(prop),stacked,prop)
+
+    def test_every_rc3_field_remains_displayed(self):
+        text=PANEL.read_text()
+        for field in RC2_FIELDS+ADDED_LABELS:
+            self.assertIn(field,text)
+
+    @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'),'Set patched Kodi source tree')
+    def test_every_dialog_property_is_displayed(self):
+        source=(Path(os.environ['KODI_NATIVE_SOURCE_TREE'])/
+                'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
+        names=set(re.findall(r'SetProperty\("DV\.(\w+)"',source))
+        text=PANEL.read_text()
+        for name in sorted(names):
+            self.assertIn('Property(DV.'+name+')',text,name)
+        for name in ('L2Targets','L3','L4','L8Targets','L9','L10','L11','L254','L255',
+                     'HDR10PlusTarget','HDR10PlusMaxSCL','HDR10PlusAverage','HDR10PlusCurve',
+                     'SourceColour','ProfileDetail','Layers','HDR10TargetOrigin','Precision',
+                     'PartialBlocks','InactiveReason'):
+            self.assertIn(name,names)
+
+    def test_memory_meter_reads_the_refreshed_property(self):
+        # System.Memory parses /proc/meminfo on every evaluation; the dialog samples it at 2 Hz.
+        self.assertNotIn('System.Memory',PANEL.read_text())
+        panel=ET.parse(PANEL)
+        meter=next(m for m in panel.findall('.//include[@content="DVMeterBar"]')
+                   if m.find('./param[@name="label"]').get('value')=='Memory')
+        self.assertEqual(meter.find('./param[@name="value"]').get('value'),
+                         '$INFO[Window(playerprocessinfo).Property(DV.Memory)]')
+        self.assertEqual(meter.find('./param[@name="id"]').get('value'),'$PARAM[memory]')
+        bars=panel.findall('.//include[@content="DVProcessLayout"]/param[@name="memory"]')
+        self.assertEqual([bar.get('value') for bar in bars],['9402','9403'])
+
+    @unittest.skipUnless(os.environ.get('KODI_NATIVE_SOURCE_TREE'),'Set patched Kodi source tree')
+    def test_dialog_samples_memory_for_both_layouts(self):
+        source=(Path(os.environ['KODI_NATIVE_SOURCE_TREE'])/
+                'xbmc/dialogs/GUIDialogPlayerProcessInfo.cpp').read_text()
+        refresh=source[source.index('void CGUIDialogPlayerProcessInfo::RefreshInfo()'):]
+        refresh=refresh[:refresh.index('\n}\n')]
+        self.assertIn('GetMemoryStatus(&memory)',refresh)
+        self.assertIn('SetProperty("DV.Memory"',refresh)
+        self.assertIn('for (const int bar : {9402, 9403})',refresh)
+
+    def test_metadata_levels_are_chips_matched_as_whole_levels(self):
+        panel=ET.parse(PANEL)
+        # Parsed and sent levels are plain chips; usage pairs applied (mint) with unused (grey).
+        lists={i.find('./param[@name="list"]').get('value') for i in panel.findall('.//include[@content="DVBlockChips"]')}
+        self.assertEqual(lists,{'DV.ParsedBlocks','DV.TransmittedBlocks'})
+        usage=panel.find('./include[@name="DVUsageChips"]/definition')
+        self.assertEqual({p.get('value') for p in usage.findall('.//param[@name="list"]')},
+                         {'DV.AppliedBlocks','DV.UnappliedBlocks'})
+        chip=panel.find('./include[@name="DVBlockChip"]/definition/control').findtext('visible')
+        contains,ends=re.fullmatch(r'String\.Contains\((.+?),"\$PARAM\[level\] "\) \| '
+                                   r'String\.EndsWith\((.+?),\$PARAM\[level\]\)',chip).groups()
+        self.assertEqual(contains,ends)
+        def shown(blocks,level):
+            # Kodi lowercases both sides of String.Contains and String.EndsWith.
+            blocks,level=blocks.lower(),level.lower()
+            return level+' ' in blocks or blocks.endswith(level)
+        levels=[i.find('./param[@name="level"]').get('value') for i in
+                panel.findall('./include[@name="DVBlockChips"]//include[@content="DVBlockChip"]')]
+        self.assertEqual(levels,['L1','L2','L3','L4','L5','L6','L8','L9','L10','L11','L254','L255'])
+        for blocks in ('L1 L2 L5 L6','L10 L11 L254','L1 L5 (authored)','L2'):
+            present={'L'+n for n in re.findall(r'L(\d+)',blocks)}
+            self.assertEqual({l for l in levels if shown(blocks,l)},present,blocks)
