@@ -9,12 +9,22 @@ pin() {
   awk -F '"' -v key="$1" '$1 == key "=" {print $2; exit}' "$2"
 }
 
+# ffmpeg.org often refuses or resets connections from hosted runners, so every error is
+# retried, and archives are kept in CB1_SOURCE_CACHE when a workflow caches them. A kept
+# archive is used only while it matches its pinned checksum.
 download() {
-  curl --fail --silent --show-error --location --retry 3 "$1" --output "$2"
-  printf '%s  %s\n' "$3" "$2" | sha256sum --check
+  local archive="$archive_root/${2##*/}"
+  if ! printf '%s  %s\n' "$3" "$archive" | sha256sum --check --status 2>/dev/null; then
+    curl --fail --silent --show-error --location --connect-timeout 30 \
+      --retry 6 --retry-delay 20 --retry-all-errors "$1" --output "$archive"
+  fi
+  printf '%s  %s\n' "$3" "$archive" | sha256sum --check
+  ln -s "$archive" "$2"
 }
 
 test_root=$(mktemp -d "${RUNNER_TEMP:?}/cb1-tests.XXXXXX")
+archive_root=${CB1_SOURCE_CACHE:-$test_root/archives}
+mkdir -p "$archive_root"
 kodi_version=$(pin PKG_VERSION packages/mediacenter/kodi/package.mk)
 ffmpeg_version=$(pin PKG_VERSION packages/multimedia/ffmpeg/package.mk)
 placebo_recipe=packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk
