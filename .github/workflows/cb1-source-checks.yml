@@ -9,8 +9,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config meson ninja-build libdrm-dev libfmt-dev libbluray-dev nlohmann-json3-dev squashfs-tools libtinyxml-dev libegl-dev libgles-dev libegl-mesa0 libgl1-mesa-dri
+      - name: Restore matched source archives
+        id: archives
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/cb1-sources
+          key: cb1-sources-${{ hashFiles('packages/mediacenter/kodi/package.mk', 'packages/multimedia/ffmpeg/package.mk', 'packages/addons/addon-depends/multimedia-tools-depends/libplacebo/package.mk', 'packages/multimedia/libbluray/package.mk') }}
       - name: Prepare matched test sources
         run: bash .github/scripts/prepare-test-sources.sh
+        env:
+          CB1_SOURCE_CACHE: ${{ runner.temp }}/cb1-sources
+      # Saved once the archives are complete, even if a later check fails.
+      - name: Save matched source archives
+        if: steps.archives.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/cb1-sources
+          key: ${{ steps.archives.outputs.cache-primary-key }}
       - name: Test source staging
         run: python3 -m unittest discover -s tests/cb1 -p 'test_*.py'
       - name: Verify bundled engine and model
