@@ -87,17 +87,26 @@ class AudioLabelsTests(unittest.TestCase):
         # must never be cut.
         room = 1080 - 2 * 24
         self.assertLessEqual(108 + frame + rows('DVInputFields') + rows('DVInputDolbyVisionFields') + 16, room)
-        # Processing for a profile 8.1 CM4.0 file while CB1 renders Dolby Vision: the file's
-        # HDR10+ and the FEL row are hidden then, and the column fits uncut too.
         shown = {}
         for row in self.panel.findall('.//include[@content]'):
             label = row.find('./param[@name="label"]')
             if row.get('content') in pitch and label is not None:
                 shown.setdefault(label.get('value'), pitch[row.get('content')])
-        processing = ['Rendering', 'Decoded surface', 'Creative trims', 'Source metadata',
-                      'Mastering max / min', 'MaxCLL / MaxFALL', 'RPU max / min', 'RPU CLL / FALL',
-                      'L1 PQ min/max/avg', 'L1 nits min/max/avg', 'L2 trim targets',
-                      'L3 offset min/max/avg', 'L5 L/R/T/B', 'L8 trim targets', 'L9 source primaries',
-                      'L11 content type', 'L254 DM mode / version', 'Used by CB1']
-        self.assertLessEqual(108 + frame + sum(shown[label] for label in processing) +
-                             pitch['DVUsageChips'] + 16, room)
+        def height(labels, chips=0):
+            return 108 + frame + sum(shown[label] for label in labels) + chips * pitch['DVUsageChips'] + 16
+        rendering = ['Rendering', 'Decoded surface', 'Creative trims']
+        metadata = ['Source metadata', 'Mastering max / min', 'MaxCLL / MaxFALL', 'RPU max / min',
+                    'RPU CLL / FALL', 'L1 PQ min/max/avg', 'L1 nits min/max/avg', 'L2 trim targets',
+                    'L3 offset min/max/avg', 'L5 L/R/T/B', 'L8 trim targets', 'L9 source primaries',
+                    'L11 content type', 'L254 DM mode / version', 'Used by CB1']
+        # Processing for a profile 8.1 CM4.0 file while CB1 renders Dolby Vision: the file's
+        # HDR10+ and the FEL row are hidden then, and the column fits uncut too.
+        self.assertLessEqual(height(rendering + metadata, chips=1), room)
+        # The tallest Processing column: a profile 7 FEL CM4.0 file in HDR10 Rendering Reference,
+        # which adds the FEL and the display it maps to. Its link minimum sits under Output.
+        self.assertLessEqual(height(rendering + ['FEL / upscaling', 'Display mapping', 'Black level'] +
+                                    metadata, chips=1), room)
+        self.assertLessEqual(height(['Video', 'Display output', 'Signal intent', 'Scanout container',
+                                     '$LOCALIZE[40848]', 'Precision', 'Committed source', 'Subtitles',
+                                     'Audio', 'Transport', 'Data', 'Output channels', 'Decoder',
+                                     'Buffers', 'Video queue / data', 'Audio queue / data']), room)

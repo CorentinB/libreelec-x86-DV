@@ -20,8 +20,9 @@ displays, the L11 content type and white point, and the L254 and L255 mode and
 version. An L8 target resolves as CB1 resolves it, a preset target display first,
 else the file's L10 definition; targets are named to three significant digits, the
 precision of a 12-bit PQ code. Layers names the base-layer compatibility and the
-enhancement layer as Kodi's decoder classifies it (FEL or MEL), and the FEL row
-appears only for sources with an enhancement layer. Input shows the decoder's
+enhancement layer as Kodi's decoder classifies it (FEL or MEL), and the FEL row,
+which also names the FEL upscaler, appears only for sources with an enhancement
+layer. The HDR10 link minimum is listed under Output. Input shows the decoder's
 colour tags (primaries, transfer and range; primaries Kodi guessed are marked
 assumed), except for profiles 5 and 10.0, which are IPT-PQc2. An HDR10+ source
 shows its latest picture's target display, MaxSCL, average MaxRGB and Bezier
