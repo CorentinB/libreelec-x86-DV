@@ -65,7 +65,7 @@ int main() {
   data.transaction.stage="Prepared"; update(data); assert(!properties["DV.OutputStage"].empty());
   data.transaction.identity.revision=3; data.transaction.requested=1; data.transaction.effective=1;
   data.transaction.stage="Failed commit"; update(data);
-  assert(!properties["DV.OutputStage"].empty());
+  assert(!properties["DV.OutputStage"].empty() && properties["DV.InactiveReason"].empty());
   data.transaction.atomicError=22; data.transaction.stage="Activation failed";
   data.transaction.reason=DVBRIDGE::OutputReason::ActivationFailed;
   update(data); assert(!properties["DV.AtomicResult"].empty() && !properties["DV.AdmissionReason"].empty());
@@ -73,6 +73,14 @@ int main() {
   update(data); assert(properties["DV.OutputStage"].empty());
   data.transaction.requested=1; data.transaction.reason=DVBRIDGE::OutputReason::NoDVTransport;
   update(data); assert(!properties["DV.OutputStage"].empty() && !properties["DV.AdmissionReason"].empty());
+  // Refused while CB1 is inactive: settled, so its reason goes beside CB1.
+  assert(properties["DV.InactiveReason"]=="reason");
+  data.transaction.atomicError=22; data.transaction.stage="Activation failed";
+  data.transaction.reason=DVBRIDGE::OutputReason::ActivationFailed;
+  update(data); assert(!properties["DV.AtomicResult"].empty() && properties["DV.InactiveReason"].empty());
+  data.transaction.atomicError=0; data.transaction.stage="Prepared";
+  data.transaction.reason=DVBRIDGE::OutputReason::None;
+  update(data); assert(!properties["DV.OutputStage"].empty() && properties["DV.InactiveReason"].empty());
   data={}; update(data); assert(properties["DV.OutputStage"].empty());
   assert(properties["DV.ProcessingVisible"]=="false");
 }
